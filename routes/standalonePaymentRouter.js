@@ -5,7 +5,7 @@ import Razorpay from "razorpay";
 import db from "../config/db.js";
 
 const router = express.Router();
-const STANDALONE_AMOUNT = 499;
+const STANDALONE_AMOUNT = 1;
 const STANDALONE_ROLE = "standalone_paid";
 
 const razorpay = new Razorpay({
