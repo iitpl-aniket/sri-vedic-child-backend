@@ -919,6 +919,7 @@ router.post("/name-correction", verifyToken,
   checkServiceLimit(), async (req, res) => {
     try {
       const { name, dob, userId } = req.body;
+      const resolvedUserId = userId || req.user?.accessId || req.user?.id;
 
       // 1. Validation
       if (
@@ -926,7 +927,7 @@ router.post("/name-correction", verifyToken,
         typeof name !== "string" ||
         name.trim().length < 2 ||
         !dob ||
-        !userId
+        !resolvedUserId
       ) {
         return res.status(400).json({
           success: false,
@@ -937,7 +938,7 @@ router.post("/name-correction", verifyToken,
       // 2. Database Insertion (Using await)
       const sql =
         "INSERT INTO name_correction (name, dob, userid) VALUES (?, ?, ?)";
-      const values = [name.trim(), dob, userId];
+      const values = [name.trim(), dob, resolvedUserId];
 
       // Yahan await lagane se code response ka intezar karega
       const [result] = await db.execute(sql, values);
@@ -950,7 +951,7 @@ router.post("/name-correction", verifyToken,
           id: result.insertId,
           name,
           dob,
-          userId,
+          userId: resolvedUserId,
         },
       });
     } catch (error) {
@@ -963,3 +964,5 @@ router.post("/name-correction", verifyToken,
   });
 
 export default router;
+
+

@@ -16,6 +16,7 @@
     "groq-sdk": "^0.3.3",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.16.1",
+    "razorpay": "^2.9.6",
     "sweph": "^2.10.0-10"
   },
   "devDependencies": {
