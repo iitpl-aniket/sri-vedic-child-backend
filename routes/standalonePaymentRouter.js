@@ -33,6 +33,7 @@ router.post("/standalone/create-order", async (req, res) => {
       amount: STANDALONE_AMOUNT * 100,
       currency: "INR",
       receipt: `standalone_${Date.now()}`,
+      payment_capture: 1,
       notes: {
         product: "name-correction-standalone",
         name: name.trim(),
@@ -135,10 +136,26 @@ router.get("/standalone/order-status/:orderId", async (req, res) => {
 
     // Check Razorpay for payments on this order
     const payments = await razorpay.orders.fetchPayments(orderId);
-    const captured = payments.items?.find((p) => p.status === "captured");
+    let captured = payments.items?.find((p) => p.status === "captured");
 
+    // For orders without payment_capture:1, payment lands in 'authorized' — capture it now
     if (!captured) {
-      return res.json({ success: true, paid: false });
+      const authorized = payments.items?.find((p) => p.status === "authorized");
+      if (!authorized) {
+        return res.json({ success: true, paid: false });
+      }
+      try {
+        await razorpay.payments.capture(authorized.id, authorized.amount, authorized.currency);
+        captured = { ...authorized, status: "captured" };
+      } catch (captureErr) {
+        // Already captured or failed — re-fetch
+        const refetch = await razorpay.payments.fetch(authorized.id);
+        if (refetch.status === "captured") {
+          captured = refetch;
+        } else {
+          return res.json({ success: true, paid: false });
+        }
+      }
     }
 
     // Build and store the signature so the verify endpoint accepts it
