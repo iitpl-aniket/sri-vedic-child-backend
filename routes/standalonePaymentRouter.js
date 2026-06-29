@@ -105,4 +105,68 @@ router.post("/standalone/verify", async (req, res) => {
   }
 });
 
+// Polled by frontend every 5s after QR/UPI payment — handler callback never fires for async payments
+router.get("/standalone/order-status/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const [rows] = await db.execute(
+      `SELECT id, status, razorpay_payment_id, razorpay_signature
+       FROM standalone_name_correction_access
+       WHERE razorpay_order_id = ? LIMIT 1`,
+      [orderId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, error: "Order not found." });
+    }
+
+    const record = rows[0];
+
+    // Already verified and paid — return cached payment details
+    if (record.status === "paid" && record.razorpay_payment_id) {
+      return res.json({
+        success: true,
+        paid: true,
+        razorpay_payment_id: record.razorpay_payment_id,
+        razorpay_signature: record.razorpay_signature,
+      });
+    }
+
+    // Check Razorpay for payments on this order
+    const payments = await razorpay.orders.fetchPayments(orderId);
+    const captured = payments.items?.find((p) => p.status === "captured");
+
+    if (!captured) {
+      return res.json({ success: true, paid: false });
+    }
+
+    // Build and store the signature so the verify endpoint accepts it
+    const signature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${orderId}|${captured.id}`)
+      .digest("hex");
+
+    await db.execute(
+      `UPDATE standalone_name_correction_access
+       SET status = 'paid',
+           razorpay_payment_id = ?,
+           razorpay_signature = ?,
+           paid_at = NOW()
+       WHERE razorpay_order_id = ? AND status != 'paid'`,
+      [captured.id, signature, orderId],
+    );
+
+    return res.json({
+      success: true,
+      paid: true,
+      razorpay_payment_id: captured.id,
+      razorpay_signature: signature,
+    });
+  } catch (error) {
+    console.error("Order status check error:", error);
+    return res.status(500).json({ success: false, error: "Could not check order status" });
+  }
+});
+
 export default router;
