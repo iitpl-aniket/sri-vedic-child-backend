@@ -16,6 +16,7 @@ const defaultOrigins = [
   "https://srivedicpuja.com",
   "https://www.srivedicpuja.com",
   "http://localhost:3000",
+  "http://localhost:3001",
 ];
 const allowedOrigins = Array.from(
   new Set(
